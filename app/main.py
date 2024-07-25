@@ -1,34 +1,40 @@
 from flask import Flask, request, jsonify
-import pickle
-import numpy as np
+import joblib
+import pandas as pd
+from utils import load_models_and_scaler, preprocess_user_input, predict_price
 
-# Load the models and scaler
-with open('models/lr_model.pkl', 'rb') as file:
-    lr_model = pickle.load(file)
+# Paths to the models, scaler, and columns
+MODEL_PATH_LR = 'C:/Users/Windows 10 Pro/Desktop/housedata/models/lr_model.pkl'
+SCALER_PATH = 'C:/Users/Windows 10 Pro/Desktop/housedata/models/scaler.pkl'
+COLUMNS_PATH = 'C:/Users/Windows 10 Pro/Desktop/housedata/models/X_columns.pkl'
 
-with open('models/rf_model.pkl', 'rb') as file:
-    rf_model = pickle.load(file)
-
-with open('models/scaler.pkl', 'rb') as file:
-    scaler = pickle.load(file)
-
+# Initialize Flask application
 app = Flask(__name__)
+
+# Load models, scaler, and column names
+lr_model, scaler, X_columns = load_models_and_scaler(MODEL_PATH_LR, SCALER_PATH, COLUMNS_PATH)
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    data = request.json
-    features = np.array([data['features']])
-    features_scaled = scaler.transform(features)
+    try:
+        data = request.get_json()
+        if not data or 'features' not in data:
+            return jsonify({'error': 'No features provided'}), 400
+
+        features = data['features']
+
+        # Preprocess input features
+        scaled_features = preprocess_user_input(features, X_columns, scaler)
+
+        # Predict using models
+        predicted_price_lr = predict_price(scaled_features, lr_model)
+
+        return jsonify({
+            'Linear Regression Prediction': predicted_price_lr,
+        })
     
-    lr_prediction = lr_model.predict(features_scaled)
-    rf_prediction = rf_model.predict(features_scaled)
-    
-    response = {
-        'lr_prediction': lr_prediction[0],
-        'rf_prediction': rf_prediction[0]
-    }
-    
-    return jsonify(response)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(debug=True, port=5000)
