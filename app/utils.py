@@ -1,33 +1,40 @@
-import pandas as pd
+from flask import Flask, request, jsonify
 import joblib
+import numpy as np
 
-def load_models_and_scaler(model_path_lr, scaler_path, columns_path):
-    """
-    Load the models, scaler, and column names.
-    """
-    lr_model = joblib.load(model_path_lr)
-    scaler = joblib.load(scaler_path)
-    X_columns = joblib.load(columns_path)
-    return lr_model, scaler, X_columns
+app = Flask(__name__)
 
-def preprocess_user_input(user_input, X_columns, scaler):
-    """
-    Preprocess the user input data to match the training data format.
-    """
-    features = pd.DataFrame([user_input])
-    
-    # Handle missing columns and one-hot encoding
-    features = pd.get_dummies(features, drop_first=True)
-    
-    # Ensure all expected columns are present
-    features = features.reindex(columns=X_columns, fill_value=0)
-    
-    # Scale features
-    scaled_features = scaler.transform(features)
-    return scaled_features
+# Load the trained model and scaler
+model = joblib.load('C:/Users/Windows 10 Pro/Desktop/housedata/models/house_price_model.pkl')
+scaler = joblib.load('C:/Users/Windows 10 Pro/Desktop/housedata/models/scaler.pkl')
 
-def predict_price(features, model):
-    """
-    Predict the price using the provided model and preprocessed features.
-    """
-    return model.predict(features)[0]
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        # Get the JSON data from the request
+        data = request.json
+        
+        # Extract features from the data
+        features = [
+            data['ZIP'], data['images_count'], data['SQUARE_FT'], 
+            data['parking_lot'], data['rooms'], data['user_id'], 
+            data['phone'], data['year_built'], data['Yr_sold'], data['sale_type']
+        ]
+        
+        # Convert the features to a numpy array and reshape for a single sample
+        features = np.array(features).reshape(1, -1)
+        
+        # Scale the features
+        scaled_features = scaler.transform(features)
+        
+        # Make the prediction
+        prediction = model.predict(scaled_features)
+        
+        # Return the prediction as JSON
+        return jsonify({'predicted_price': prediction[0]})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+if __name__ == '__main__':
+    app.run(debug=True)
